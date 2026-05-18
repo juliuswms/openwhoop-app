@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use openwhoop::db::DatabaseHandler;
+use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 
 use crate::{
     error::AppResult,
@@ -16,6 +17,7 @@ pub struct AppState {
     import_sync: Mutex<ImportSyncController>,
     heart_rate_stream: Mutex<HeartRateStreamController>,
     stress_stream: Mutex<StressStreamController>,
+    ble_operation: AsyncMutex<()>,
 }
 
 impl Default for AppState {
@@ -26,6 +28,7 @@ impl Default for AppState {
             import_sync: Mutex::new(ImportSyncController::default()),
             heart_rate_stream: Mutex::new(HeartRateStreamController::default()),
             stress_stream: Mutex::new(StressStreamController::default()),
+            ble_operation: AsyncMutex::new(()),
         }
     }
 }
@@ -111,6 +114,10 @@ impl AppState {
         let heart_rate_running = self.heart_rate_stream.lock()?.is_running();
         let stress_running = self.stress_stream.lock()?.is_running();
         Ok(heart_rate_running || stress_running)
+    }
+
+    pub async fn lock_ble_operation(&self) -> AsyncMutexGuard<'_, ()> {
+        self.ble_operation.lock().await
     }
 }
 

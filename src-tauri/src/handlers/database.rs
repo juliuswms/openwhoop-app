@@ -8,6 +8,7 @@ use std::{
 };
 
 use openwhoop::db::{sync::DatabaseSync, DatabaseHandler};
+use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_fs::{FsExt, OpenOptions};
@@ -111,6 +112,68 @@ pub fn export_database_copy(app: AppHandle) -> AppResult<Option<String>> {
     };
 
     Ok(Some(exported_location))
+}
+
+#[tauri::command]
+pub async fn clear_database(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+    database_state: tauri::State<'_, DatabaseState>,
+) -> AppResult<()> {
+    if state.get_import_sync_controller(|controller| controller.running)? {
+        return Err(AppError::from(
+            "Cannot clear the database while an import is running.",
+        ));
+    }
+
+    let database = database_state.database();
+    let rows = database
+        .connection()
+        .query_all(Statement::from_string(
+            DbBackend::Sqlite,
+            "SELECT name FROM sqlite_master
+             WHERE type = 'table'
+             AND name NOT LIKE 'sqlite_%'
+             AND name != 'seaql_migrations'"
+                .to_owned(),
+        ))
+        .await
+        .map_err(|err| AppError::from(format!("Unable to list database tables: {err}")))?;
+
+    database
+        .connection()
+        .execute_unprepared("PRAGMA foreign_keys = OFF;")
+        .await
+        .map_err(|err| AppError::from(format!("Unable to disable foreign keys: {err}")))?;
+
+    for row in rows {
+        let table_name: String = row
+            .try_get("", "name")
+            .map_err(|err| AppError::from(format!("Unable to read table name: {err}")))?;
+        let escaped_table_name = table_name.replace('"', "\"\"");
+
+        database
+            .connection()
+            .execute_unprepared(&format!("DELETE FROM \"{escaped_table_name}\";"))
+            .await
+            .map_err(|err| AppError::from(format!("Unable to clear table {table_name}: {err}")))?;
+    }
+
+    database
+        .connection()
+        .execute_unprepared("DELETE FROM sqlite_sequence;")
+        .await
+        .map_err(|err| AppError::from(format!("Unable to reset sqlite_sequence: {err}")))?;
+
+    database
+        .connection()
+        .execute_unprepared("PRAGMA foreign_keys = ON;")
+        .await
+        .map_err(|err| AppError::from(format!("Unable to restore foreign keys: {err}")))?;
+
+    log_info(&app, "database.clear", "Cleared local database.");
+
+    Ok(())
 }
 
 #[tauri::command]

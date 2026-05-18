@@ -50,10 +50,12 @@ pub async fn scan_whoops(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> AppResult<Vec<WhoopScanResult>> {
+    let _ble_guard = state.inner().lock_ble_operation().await;
     log_info(&app, "scan_whoops", "Starting WHOOP BLE scan.");
     stop_background_sync(state.inner()).await?;
 
     let handler = tauri_plugin_blec::get_handler().map_err(|err| err.to_string())?;
+    let _ = handler.stop_scan().await;
     let mut devices = scan_tauri_blec_devices(
         handler,
         Duration::from_secs(ACTIVE_WHOOP_SCAN_DURATION_SECS),
@@ -90,6 +92,7 @@ pub async fn scan_whoops(
 
 pub async fn scan_for_saved_whoop(address: &str) -> AppResult<Option<TauriBlecDevice>> {
     let handler = tauri_plugin_blec::get_handler().map_err(|err| err.to_string())?;
+    let _ = handler.stop_scan().await;
 
     loop {
         let scanned_devices =

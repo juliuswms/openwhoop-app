@@ -3,11 +3,7 @@ use openwhoop::OpenWhoop;
 use openwhoop_codec::constants::WhoopGeneration;
 use tauri::AppHandle;
 
-use crate::{
-    error::AppResult,
-    handlers::{log_error, log_info},
-    state::DatabaseState,
-};
+use crate::{error::AppResult, handlers::log_error, state::DatabaseState};
 use openwhoop::db::{DailyStats, DailyStatsAverage};
 
 #[derive(Debug, Clone, Serialize)]
@@ -33,7 +29,7 @@ pub struct DailyStrainSummary {
 pub struct DailyActivitySummary {
     period_id: NaiveDate,
     start: NaiveDateTime,
-    end: NaiveDateTime,
+    end: Option<NaiveDateTime>,
     activity: String,
     strain: Option<f64>,
 }
@@ -154,7 +150,7 @@ pub async fn daily_info_snapshot(
     let target_date = date.unwrap_or_else(|| Local::now().date_naive());
     let today = Local::now().date_naive();
 
-    let mut whoop = OpenWhoop::new(database.clone(), WhoopGeneration::Placeholder);
+    let whoop = OpenWhoop::new(database.clone(), WhoopGeneration::Placeholder);
     let mut info = whoop
         .get_daily_info(target_date)
         .await

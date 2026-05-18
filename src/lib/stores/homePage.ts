@@ -10,6 +10,7 @@ import {
   getLast7DayDailyStatsAverage,
   getLatestDailyStats,
   getSavedWhoopRuntimeStatus,
+  getUnfinishedActivity,
   getWhoopSelectionState,
   rebootWhoopDevice,
 } from "$lib/api";
@@ -20,6 +21,7 @@ import type {
   EarliestReadingTimeSummary,
   SavedWhoopConnectionResult,
   SavedWhoopRuntimeStatus,
+  UnfinishedActivitySummary,
 } from "$lib/api/interfaces";
 import {
   clearSelectedWhoop,
@@ -94,7 +96,9 @@ export function createHomePageState() {
   const activeScreen = writable<ActiveScreen>("main");
   const hasSelectedWhoopBefore = writable(false);
   const latestSyncLabel = writable(emptySyncLabel);
+  const batteryLevel = writable<number | null>(null);
   const dailyInfo = writable<DailyInfoSummary | null>(null);
+  const unfinishedActivity = writable<UnfinishedActivitySummary | null>(null);
   const latestDailyStats = writable<DailyStatsSummary | null>(null);
   const last7DayDailyStatsAverage = writable<DailyStatsAverageSummary | null>(null);
   const selectedDate = writable(todayIsoDate());
@@ -127,7 +131,9 @@ export function createHomePageState() {
     );
     hasSelectedWhoopBefore.set(true);
     latestSyncLabel.set(emptySyncLabel);
+    batteryLevel.set(null);
     dailyInfo.set(null);
+    unfinishedActivity.set(null);
     latestDailyStats.set(null);
     last7DayDailyStatsAverage.set(null);
     selectedDate.set(todayIsoDate());
@@ -169,6 +175,7 @@ export function createHomePageState() {
 
       if (savedWhoop) {
         applySavedWhoopResult(savedWhoop);
+        void refreshUnfinishedActivity();
         void loadEarliestReadingTime();
         void refreshHealthStats();
       } else {
@@ -197,7 +204,9 @@ export function createHomePageState() {
     selectedWhoopError.set("");
     activeScreen.set("main");
     latestSyncLabel.set(emptySyncLabel);
+    batteryLevel.set(null);
     dailyInfo.set(null);
+    unfinishedActivity.set(null);
     latestDailyStats.set(null);
     last7DayDailyStatsAverage.set(null);
     selectedDate.set(todayIsoDate());
@@ -230,6 +239,7 @@ export function createHomePageState() {
       if (savedAddress) {
         try {
           applyRustRuntimeStatus(await getSavedWhoopRuntimeStatus());
+          void refreshUnfinishedActivity();
           void loadEarliestReadingTime();
         } catch (reason) {
           logApp(
@@ -371,10 +381,21 @@ export function createHomePageState() {
     }
   }
 
+  function syncActivityScreenState(activity: UnfinishedActivitySummary | null) {
+    const previousActivity = get(unfinishedActivity);
+    unfinishedActivity.set(activity);
+
+    if (!previousActivity && activity) {
+      activeScreen.set("start-activity");
+    }
+  }
+
   function applyRustRuntimeStatus(status: SavedWhoopRuntimeStatus) {
     const currentWhoop = get(selectedWhoop);
     const currentLatestSyncLabel = get(latestSyncLabel);
+    const currentBatteryLevel = get(batteryLevel);
     const nextLatestSyncLabel = status.latestReadingLabel ?? emptySyncLabel;
+    const nextBatteryLevel = status.batteryLevel ?? null;
     const currentDailyInfo = get(dailyInfo);
     const nextDailyInfo =
       get(selectedDate) === todayIsoDate() ? status.dailyInfo : currentDailyInfo;
@@ -387,10 +408,11 @@ export function createHomePageState() {
       ) &&
       currentWhoop?.connected !== status.connected;
     const latestSyncChanged = currentLatestSyncLabel !== nextLatestSyncLabel;
+    const batteryChanged = currentBatteryLevel !== nextBatteryLevel;
     const dailyInfoChanged =
       JSON.stringify(currentDailyInfo) !== JSON.stringify(nextDailyInfo);
 
-    if (connectedChanged || latestSyncChanged || dailyInfoChanged) {
+    if (connectedChanged || latestSyncChanged || batteryChanged || dailyInfoChanged) {
       logApp(
         "debug",
         "home.runtimeStatus",
@@ -399,6 +421,7 @@ export function createHomePageState() {
           selectedWhoopAddress: status.selectedWhoopAddress,
           connectedDeviceAddress: status.connectedDeviceAddress,
           connected: status.connected,
+          batteryLevel: status.batteryLevel,
           latestReadingLabel: status.latestReadingLabel,
           dailyInfo: status.dailyInfo,
           backgroundSyncRunning: status.backgroundSync.running,
@@ -408,6 +431,7 @@ export function createHomePageState() {
     }
 
     latestSyncLabel.set(nextLatestSyncLabel);
+    batteryLevel.set(nextBatteryLevel);
     dailyInfo.set(nextDailyInfo);
 
     if (
@@ -447,6 +471,7 @@ export function createHomePageState() {
     try {
       const status = await getSavedWhoopRuntimeStatus();
       applyRustRuntimeStatus(status);
+      void refreshUnfinishedActivity();
       void loadEarliestReadingTime();
       void refreshHealthStats();
     } catch (reason) {
@@ -458,6 +483,25 @@ export function createHomePageState() {
       );
     } finally {
       rustBackgroundJobBusy = false;
+    }
+  }
+
+  async function refreshUnfinishedActivity() {
+    if (!isTauri()) {
+      syncActivityScreenState(null);
+      return;
+    }
+
+    try {
+      syncActivityScreenState(await getUnfinishedActivity());
+    } catch (reason) {
+      logApp(
+        "warn",
+        "home.activity",
+        "Unable to load unfinished activity.",
+        reason,
+      );
+      unfinishedActivity.set(null);
     }
   }
 
@@ -659,7 +703,9 @@ export function createHomePageState() {
     activeScreen,
     hasSelectedWhoopBefore,
     latestSyncLabel,
+    batteryLevel,
     dailyInfo,
+    unfinishedActivity,
     latestDailyStats,
     last7DayDailyStatsAverage,
     selectedDate,
@@ -687,6 +733,7 @@ export function createHomePageState() {
     selectPreviousDate,
     selectNextDate,
     refreshSelectedDate,
+    refreshUnfinishedActivity,
     refreshHealthStats,
     closeHealthMonitor,
     closeStressMonitor,

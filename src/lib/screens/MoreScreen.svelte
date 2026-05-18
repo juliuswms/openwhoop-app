@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { Button, Switch } from "bits-ui";
   import {
+    clearDatabase,
     exportDatabaseCopy,
     getDebugPackets,
     getImportSyncStatus,
@@ -11,6 +12,7 @@
   import type { ImportSyncStatus } from "$lib/api/interfaces";
 
   let exporting = false;
+  let clearing = false;
   let debugPackets = false;
   let savingDebugPackets = false;
   let successVisible = false;
@@ -52,7 +54,10 @@
       previousImportRunning = nextStatus.running;
       importStatus = nextStatus;
 
-      if (importStatus.lastError && importStatus.lastError !== lastShownImportError) {
+      if (
+        importStatus.lastError &&
+        importStatus.lastError !== lastShownImportError
+      ) {
         lastShownImportError = importStatus.lastError;
         showError(importStatus.lastError);
       } else if (!importStatus.lastError) {
@@ -156,6 +161,19 @@
     }
   }
 
+  async function handleClearDatabase() {
+    clearing = true;
+
+    try {
+      await clearDatabase();
+      showSuccess("Database cleared");
+    } catch (reason) {
+      showError(toErrorMessage(reason));
+    } finally {
+      clearing = false;
+    }
+  }
+
   async function handleDebugPacketsChange(nextValue: boolean) {
     debugPackets = nextValue;
     savingDebugPackets = true;
@@ -194,7 +212,11 @@
     {/if}
 
     {#if errorVisible}
-      <p class="alert alert--error more-screen__toast more-screen__toast--error">{errorMessage}</p>
+      <p
+        class="alert alert--error more-screen__toast more-screen__toast--error"
+      >
+        {errorMessage}
+      </p>
     {/if}
 
     <div class="panel stack-sm">
@@ -225,7 +247,7 @@
       <Button.Root
         class="ui-button ui-button--secondary ui-button--full"
         type="button"
-        disabled={exporting}
+        disabled={exporting || clearing}
         onclick={() => void handleExport()}
       >
         {exporting ? "Exporting database..." : "Export Database"}
@@ -234,10 +256,19 @@
       <Button.Root
         class="ui-button ui-button--full"
         type="button"
-        disabled={Boolean(importStatus?.running) || exporting}
+        disabled={Boolean(importStatus?.running) || exporting || clearing}
         onclick={() => void handleImport()}
       >
         {getImportButtonLabel(importStatus)}
+      </Button.Root>
+
+      <Button.Root
+        class="ui-button ui-button--danger ui-button--full"
+        type="button"
+        disabled={clearing || Boolean(importStatus?.running) || exporting}
+        onclick={() => void handleClearDatabase()}
+      >
+        {clearing ? "Clearing database..." : "Clear DB"}
       </Button.Root>
     </div>
   </div>

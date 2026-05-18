@@ -1,4 +1,7 @@
-use openwhoop_codec::{constants::WhoopGeneration, WhoopData, WhoopPacket};
+use chrono::Local;
+use openwhoop_codec::{constants::WhoopGeneration, HistoryReading, WhoopData, WhoopPacket};
+use openwhoop_entities::activities;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{
@@ -8,7 +11,9 @@ use crate::{
         whoop_manager::read_persisted_whoop_store,
     },
     internals::{ensure_connected_saved_whoop, frame_whoop_command},
-    now_unix_ms, AppState,
+    now_unix_ms,
+    state::DatabaseState,
+    AppState,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -36,6 +41,7 @@ pub struct HeartRateStreamController {
     last_sample_at_ms: Option<u64>,
     last_bpm: Option<u8>,
     last_error: Option<String>,
+    last_activity_strain_refresh_minute: Option<u64>,
 }
 
 impl Default for HeartRateStreamController {
@@ -48,6 +54,7 @@ impl Default for HeartRateStreamController {
             last_sample_at_ms: None,
             last_bpm: None,
             last_error: None,
+            last_activity_strain_refresh_minute: None,
         }
     }
 }
@@ -86,7 +93,7 @@ pub async fn start_heart_rate_stream(
 
     stop_stress_stream_internal(&app, state.inner()).await?;
     stop_heart_rate_stream_internal(&app, state.inner()).await?;
-    ensure_connected_saved_whoop(&address).await?;
+    ensure_connected_saved_whoop(state.inner(), &address).await?;
 
     let handler = tauri_plugin_blec::get_handler()?;
     let callback_app = app.clone();
@@ -133,6 +140,7 @@ pub async fn start_heart_rate_stream(
         controller.last_sample_at_ms = None;
         controller.last_bpm = None;
         controller.last_error = None;
+        controller.last_activity_strain_refresh_minute = None;
     })?;
 
     if let Err(error) = send_connected_whoop_command(
@@ -150,6 +158,7 @@ pub async fn start_heart_rate_stream(
             controller.generation = None;
             controller.next_seq = 0;
             controller.last_error = Some(error.clone());
+            controller.last_activity_strain_refresh_minute = None;
         })?;
 
         return Err(AppError::from(error));
@@ -207,6 +216,7 @@ pub(crate) async fn stop_heart_rate_stream_internal(
                 {
                     let _ = state.update_heart_rate_stream(move |controller| {
                         controller.last_error = Some(error);
+                        controller.last_activity_strain_refresh_minute = None;
                     });
                 }
             }
@@ -221,6 +231,7 @@ pub(crate) async fn stop_heart_rate_stream_internal(
             controller.next_seq = 0;
             controller.last_sample_at_ms = None;
             controller.last_bpm = None;
+            controller.last_activity_strain_refresh_minute = None;
         })?;
     }
 
@@ -310,4 +321,113 @@ fn handle_heart_rate_notification(app: &AppHandle, generation: WhoopGeneration, 
         controller.last_error = None;
     });
     let _ = app.emit(HEART_RATE_STREAM_EVENT, sample);
+
+    let persist_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = persist_realtime_heart_rate_sample(&persist_app, unix, bpm).await {
+            log_error(
+                &persist_app,
+                "heart_rate_stream",
+                format!("Unable to persist realtime heart-rate sample: {error}"),
+            );
+        }
+    });
+}
+
+async fn persist_realtime_heart_rate_sample(
+    app: &AppHandle,
+    unix: u32,
+    bpm: u8,
+) -> Result<(), String> {
+    let database = app.state::<DatabaseState>().inner().database();
+    database
+        .create_reading(HistoryReading {
+            unix: u64::from(unix).saturating_mul(1000),
+            bpm,
+            rr: Vec::new(),
+            imu_data: Vec::new(),
+            sensor_data: None,
+        })
+        .await
+        .map_err(|err| err.to_string())?;
+
+    maybe_refresh_unfinished_activity_strain(app, unix).await
+}
+
+async fn maybe_refresh_unfinished_activity_strain(
+    app: &AppHandle,
+    unix: u32,
+) -> Result<(), String> {
+    let minute_bucket = u64::from(unix) / 60;
+    let app_state = app.state::<AppState>();
+    let should_refresh = app_state
+        .inner()
+        .get_heart_rate_stream(|controller| {
+            controller
+                .last_activity_strain_refresh_minute
+                .is_none_or(|last_minute| minute_bucket > last_minute)
+        })
+        .map_err(String::from)?;
+
+    if !should_refresh {
+        return Ok(());
+    }
+
+    let database = app.state::<DatabaseState>().inner().database();
+    let Some(unfinished_activity) = database
+        .get_unfinished_activity()
+        .await
+        .map_err(|err| err.to_string())?
+    else {
+        app_state
+            .inner()
+            .update_heart_rate_stream(|controller| {
+                controller.last_activity_strain_refresh_minute = Some(minute_bucket);
+            })
+            .map_err(String::from)?;
+        return Ok(());
+    };
+
+    let simulated_activity = openwhoop::types::activities::ActivityPeriod {
+        to: Some(Local::now().naive_local()),
+        ..unfinished_activity.clone()
+    };
+
+    let Some(strain) = database
+        .calculate_strain_for_activity(simulated_activity)
+        .await
+        .map_err(|err| err.to_string())?
+    else {
+        app_state
+            .inner()
+            .update_heart_rate_stream(|controller| {
+                controller.last_activity_strain_refresh_minute = Some(minute_bucket);
+            })
+            .map_err(String::from)?;
+        return Ok(());
+    };
+
+    let activity = activities::Entity::find()
+        .filter(activities::Column::Start.eq(unfinished_activity.from))
+        .one(database.connection())
+        .await
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| "Unfinished activity missing during realtime strain update".to_owned())?;
+
+    let mut activity_model: activities::ActiveModel = activity.into();
+    activity_model.strain = Set(Some(strain));
+    activity_model.synced = Set(false);
+    activity_model
+        .update(database.connection())
+        .await
+        .map_err(|err| err.to_string())?;
+
+    app_state
+        .inner()
+        .update_heart_rate_stream(|controller| {
+            controller.last_activity_strain_refresh_minute = Some(minute_bucket);
+        })
+        .map_err(|err| format!("{:?}", err))?;
+
+    Ok(())
 }

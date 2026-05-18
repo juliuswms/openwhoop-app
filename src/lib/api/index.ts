@@ -10,6 +10,8 @@ import type {
     SavedWhoopConnectionResult,
     SavedWhoopRuntimeStatus,
     StressStreamStatus,
+    UnfinishedActivitySummary,
+    UnfinishedActivityMetricsSummary,
     ImportSyncStatus,
     WhoopScanResult,
     WhoopSelectionState,
@@ -73,12 +75,27 @@ export async function getActivityTypes(): Promise<ActivityTypeOption[]> {
     return await invoke("get_activity_types");
 }
 
+export async function getUnfinishedActivity(): Promise<UnfinishedActivitySummary | null> {
+    return await invoke("get_unfinished_activity");
+}
+
+export async function refreshUnfinishedActivityMetrics(): Promise<UnfinishedActivityMetricsSummary> {
+    return await invoke("refresh_unfinished_activity_metrics");
+}
+
 export async function createActivity(
     from: string,
     to: string,
     activityType?: string,
 ): Promise<void> {
     await invoke("create_activity", { from, to, activityType });
+}
+
+export async function startActivity(
+    from: string,
+    activityType?: string,
+): Promise<boolean> {
+    return await invoke("start_activity", { from, activityType });
 }
 
 export async function updateActivity(
@@ -128,6 +145,10 @@ export async function stopStressStream(): Promise<StressStreamStatus> {
 
 export async function exportDatabaseCopy(): Promise<string | null> {
     return await invoke("export_database_copy");
+}
+
+export async function clearDatabase(): Promise<void> {
+    await invoke("clear_database");
 }
 
 export async function importDatabaseSync(): Promise<boolean> {

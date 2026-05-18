@@ -1,4 +1,7 @@
-use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    fs,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use tauri::{AppHandle, Manager};
 

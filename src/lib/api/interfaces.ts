@@ -44,6 +44,24 @@ export interface ActivityTypeOption {
     label: string;
 }
 
+export interface UnfinishedActivitySummary {
+    periodId: string;
+    start: string;
+    activity: string;
+    strain: number | null;
+}
+
+export interface ActivityHeartRateStatsSummary {
+    minHr: number;
+    maxHr: number;
+    avgHr: number;
+}
+
+export interface UnfinishedActivityMetricsSummary {
+    activity: UnfinishedActivitySummary | null;
+    heartRateStats: ActivityHeartRateStatsSummary | null;
+}
+
 export interface DailyInfoSummary {
     date: string;
     sleep: DailySleepSummary | null;
@@ -111,6 +129,7 @@ export interface SavedWhoopRuntimeStatus {
     selectedWhoopAddress: string | null;
     connectedDeviceAddress: string | null;
     connected: boolean;
+    batteryLevel: number | null;
     latestReadingLabel: string | null;
     dailyInfo: DailyInfoSummary;
     backgroundSync: BackgroundSyncStatus;

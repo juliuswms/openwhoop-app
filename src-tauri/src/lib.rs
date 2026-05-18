@@ -47,10 +47,14 @@ pub fn run() {
         .plugin(tauri_plugin_blec::init())
         .invoke_handler(tauri::generate_handler![
             database::export_database_copy,
+            database::clear_database,
             database::start_import_database_sync,
             database::get_import_sync_status,
             activity::get_activity_types,
+            activity::get_unfinished_activity,
+            activity::refresh_unfinished_activity_metrics,
             activity::create_activity,
+            activity::start_activity,
             activity::update_activity,
             activity::delete_activity,
             log::write_frontend_log,

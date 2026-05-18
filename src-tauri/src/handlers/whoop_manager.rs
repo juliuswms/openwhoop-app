@@ -18,6 +18,14 @@ use crate::{
     AppState,
 };
 
+const PLACEHOLDER_WHOOP_ADDRESS: &str = "00:00:00:00:00:00";
+
+fn is_placeholder_whoop_address(address: &str) -> bool {
+    normalize_whoop_address(address)
+        .map(|normalized| normalized == PLACEHOLDER_WHOOP_ADDRESS)
+        .unwrap_or(false)
+}
+
 #[derive(Debug, Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PersistedWhoopStore {
@@ -114,7 +122,33 @@ pub async fn connect_to_whoop(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> Result<String, String> {
+    let _ble_guard = state.inner().lock_ble_operation().await;
     let normalized_address = normalize_whoop_address(&address)?;
+    let existing_store = read_persisted_whoop_store(&app)?;
+
+    if is_placeholder_whoop_address(&normalized_address) {
+        log_info(
+            &app,
+            "connect_to_whoop",
+            format!("Saving placeholder WHOOP address={normalized_address}"),
+        );
+
+        let _ = stop_background_sync(state.inner()).await;
+        disconnect_connected_whoop().await;
+        write_persisted_whoop_store(
+            &app,
+            &PersistedWhoopStore {
+                selected_whoop_address: Some(normalized_address.clone()),
+                generation: Some(WhoopGeneration::Placeholder),
+                has_selected_whoop: true,
+                debug_packets: existing_store.debug_packets,
+            },
+        )?;
+        state
+            .inner()
+            .set_whoop_address(Some(normalized_address.clone()))?;
+        return Ok(normalized_address);
+    }
 
     log_info(
         &app,
@@ -123,7 +157,6 @@ pub async fn connect_to_whoop(
     );
 
     let generation = connect_to_whoop_address(&normalized_address, state.inner()).await?;
-    let existing_store = read_persisted_whoop_store(&app)?;
 
     write_persisted_whoop_store(
         &app,
@@ -137,6 +170,18 @@ pub async fn connect_to_whoop(
     state
         .inner()
         .set_whoop_address(Some(normalized_address.clone()))?;
+
+    {
+        let packet = match generation {
+            WhoopGeneration::Gen4 => WhoopPacket::run_alarm_now(),
+            WhoopGeneration::Gen5 => WhoopPacket::run_haptic_pattern_gen5(),
+            WhoopGeneration::Placeholder => {
+                return Err("WhoopGeneration::Placeholder cannot ring a device".to_owned());
+            }
+        };
+
+        send_device_command(state.inner(), &app, &normalized_address, generation, packet).await?;
+    }
 
     if let Ok(handler) = tauri_plugin_blec::get_handler() {
         let _ = handler.stop_scan().await;
@@ -191,6 +236,7 @@ pub async fn connect_to_whoop_address(
 
 pub async fn connect_handler_to_whoop_address(address: &str) -> AppResult<WhoopGeneration> {
     let handler = tauri_plugin_blec::get_handler().map_err(|err| err.to_string())?;
+    let _ = handler.stop_scan().await;
 
     if handler.is_connected() {
         let connected_device = handler.connected_device().await?;
@@ -240,13 +286,31 @@ pub async fn connect_to_saved_whoop(
     app: AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> AppResult<Option<SavedWhoopConnectionResult>> {
-    let Some(whoop_address) = read_persisted_whoop_store(&app)?.selected_whoop_address else {
+    let _ble_guard = state.inner().lock_ble_operation().await;
+    let store = read_persisted_whoop_store(&app)?;
+    let Some(whoop_address) = store.selected_whoop_address else {
         return Err(AppError::from("No selected whoop"));
     };
 
     state
         .inner()
         .set_whoop_address(Some(whoop_address.clone()))?;
+
+    if is_placeholder_whoop_address(&whoop_address) {
+        log_info(
+            &app,
+            "connect_to_saved_whoop",
+            "Restoring placeholder WHOOP without BLE reconnect.",
+        );
+        return Ok(Some(SavedWhoopConnectionResult {
+            address: whoop_address,
+            name: Some("Placeholder WHOOP".to_owned()),
+            rssi: None,
+            generation: Some(store.generation.unwrap_or(WhoopGeneration::Placeholder)),
+            connected: false,
+            error: None,
+        }));
+    }
 
     log_info(
         &app,
@@ -318,7 +382,7 @@ pub async fn clear_selected_whoop_address(
         "selection_state",
         "Clearing the saved WHOOP selection.",
     );
-    stop_background_sync(state.inner()).await?;
+    let _ = stop_background_sync(state.inner()).await;
     disconnect_connected_whoop().await;
     let existing_store = read_persisted_whoop_store(&app)?;
     write_persisted_whoop_store(

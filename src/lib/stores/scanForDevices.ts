@@ -15,6 +15,9 @@ interface CreateScanForDevicesStateOptions {
 
 const placeholderRows = [0, 1, 2];
 const scanRetryDelayMs = 250;
+const placeholderWhoopAddress = "00:00:00:00:00:00";
+const placeholderWhoopName = "Placeholder WHOOP";
+const placeholderWhoopGeneration = "Placeholder";
 
 function toErrorMessage(reason: unknown) {
   return reason instanceof Error ? reason.message : String(reason);
@@ -22,6 +25,49 @@ function toErrorMessage(reason: unknown) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function isPlaceholderWhoopAddress(address: string) {
+  return address.trim().toUpperCase() === placeholderWhoopAddress;
+}
+
+function normalizeScannedDevice(device: WhoopScanResult): WhoopScanResult {
+  if (!isPlaceholderWhoopAddress(device.address)) {
+    return device;
+  }
+
+  return {
+    ...device,
+    name: placeholderWhoopName,
+    generation: placeholderWhoopGeneration,
+    rssi: null,
+  };
+}
+
+function withPlaceholderWhoop(
+  devices: WhoopScanResult[],
+  mode: ScanMode,
+): WhoopScanResult[] {
+  const normalizedDevices = devices.map(normalizeScannedDevice);
+
+  if (
+    mode !== "initial" ||
+    normalizedDevices.some((device) =>
+      isPlaceholderWhoopAddress(device.address),
+    )
+  ) {
+    return normalizedDevices;
+  }
+
+  return [
+    ...normalizedDevices,
+    {
+      address: placeholderWhoopAddress,
+      name: placeholderWhoopName,
+      generation: placeholderWhoopGeneration,
+      rssi: null,
+    },
+  ];
 }
 
 export function eyebrowCopy(mode: ScanMode) {
@@ -98,7 +144,10 @@ export function createScanForDevicesState() {
 
     while (mounted && !get(selectedAddress)) {
       try {
-        const result = await scanForWhoops();
+        const result = withPlaceholderWhoop(
+          await scanForWhoops(),
+          options.mode,
+        );
 
         if (!mounted || get(selectedAddress)) {
           break;

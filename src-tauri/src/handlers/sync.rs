@@ -163,7 +163,7 @@ async fn run_background_sync_task(
             ),
         );
         let app_state = app.state::<AppState>();
-        let cycle_result = match ensure_connected_saved_whoop(&address).await {
+        let cycle_result = match ensure_connected_saved_whoop(&app_state, &address).await {
             Ok(()) => {
                 run_background_sync_cycle(
                     app_state.inner(),
@@ -266,7 +266,8 @@ async fn run_background_sync_cycle(
     let sync_result = whoop
         .sync_history(
             should_exit,
-            HistorySyncConfig::from_secs(0, BACKGROUND_SYNC_IDLE_TIMEOUT_SECS),
+            HistorySyncConfig::from_secs(0, BACKGROUND_SYNC_IDLE_TIMEOUT_SECS)
+                .with_exit_on_failure(false),
         )
         .await
         .map_err(|err| format!("History sync failed: {err}"));

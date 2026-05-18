@@ -24,7 +24,9 @@
   const activeScreen = appStore.home.activeScreen;
   const hasSelectedWhoopBefore = appStore.home.hasSelectedWhoopBefore;
   const latestSyncLabel = appStore.home.latestSyncLabel;
+  const batteryLevel = appStore.home.batteryLevel;
   const dailyInfo = appStore.home.dailyInfo;
+  const unfinishedActivity = appStore.home.unfinishedActivity;
   const selectedDate = appStore.home.selectedDate;
   const canSelectPreviousDate = appStore.home.canSelectPreviousDate;
   const isSelectedDateToday = appStore.home.isSelectedDateToday;
@@ -164,6 +166,7 @@
     <DeviceManagementScreen
       whoop={$selectedWhoop}
       latestSyncLabel={$latestSyncLabel}
+      batteryLevel={$batteryLevel}
       error={$selectedWhoopError}
       clearing={$clearing}
       reconnecting={$reconnecting}
@@ -190,7 +193,13 @@
   {:else if $activeScreen === "start-activity"}
     <StartActivityScreen
       whoop={$selectedWhoop}
+      unfinishedActivity={$unfinishedActivity}
       onBack={appStore.home.closeActivityFlow}
+      onStarted={appStore.home.refreshUnfinishedActivity}
+      onFinished={async () => {
+        await appStore.home.refreshUnfinishedActivity();
+        await appStore.home.refreshSelectedDate();
+      }}
     />
   {:else if $activeScreen === "stress-monitor"}
     <StressMonitorScreen

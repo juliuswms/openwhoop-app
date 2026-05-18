@@ -94,12 +94,19 @@ export function generationLabel(whoop: SelectedWhoop) {
   return hasSelectedWhoop(whoop) ? whoop.generation : "Not paired";
 }
 
-export function batteryPercentLabel() {
-  return "--%";
+export function batteryPercentLabel(batteryLevel: number | null) {
+  return batteryLevel === null ? "--%" : `${batteryLevel}%`;
 }
 
-export function batteryDetail(whoop: SelectedWhoop) {
-  return hasSelectedWhoop(whoop) ? "Battery unavailable" : "Not paired";
+export function batteryDetail(
+  whoop: SelectedWhoop,
+  batteryLevel: number | null,
+) {
+  if (!hasSelectedWhoop(whoop)) {
+    return "Not paired";
+  }
+
+  return batteryLevel === null ? "Battery unavailable" : "Current battery level";
 }
 
 export function connectionTone(
@@ -133,7 +140,7 @@ export function isDeviceManagementBusy(
 export function createDeviceManagementScreenState() {
   const activeTab = writable<DeviceTab>("status");
   const heartRateBroadcast = writable(false);
-  const localNotice = writable("");
+
   let options: CreateDeviceManagementScreenStateOptions = {
     onReconnect: noopAsync,
     onChooseAnother: noopAsync,
@@ -149,38 +156,23 @@ export function createDeviceManagementScreenState() {
     options = nextOptions;
   }
 
-  function clearNotice() {
-    localNotice.set("");
-  }
-
-  function openInfoNotice() {
-    localNotice.set(
-      "Pair, reconnect, unpair, reboot, and erase are active here. Broadcast heart rate is saved locally per device. Battery and firmware values stay hidden until the Tauri backend exposes real device data.",
-    );
-  }
-
   function openScanScreen() {
-    clearNotice();
     options.onOpenScan();
   }
 
   async function chooseAnotherWhoop() {
-    clearNotice();
     await options.onChooseAnother();
   }
 
   async function reconnectWhoop() {
-    clearNotice();
     await options.onReconnect();
   }
 
   async function rebootDevice() {
-    clearNotice();
     await options.onReboot();
   }
 
   async function eraseDeviceData() {
-    clearNotice();
     await options.onErase();
   }
 
@@ -223,7 +215,6 @@ export function createDeviceManagementScreenState() {
   }
 
   function toggleHeartRateBroadcast(whoop: SelectedWhoop) {
-    clearNotice();
     syncBroadcastPreferenceFromStorage(whoop);
     heartRateBroadcast.update((value) => !value);
     persistBroadcastPreference();
@@ -232,9 +223,7 @@ export function createDeviceManagementScreenState() {
   return {
     activeTab,
     heartRateBroadcast,
-    localNotice,
     configure,
-    openInfoNotice,
     openScanScreen,
     chooseAnotherWhoop,
     reconnectWhoop,

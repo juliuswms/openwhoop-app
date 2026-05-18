@@ -17,7 +17,8 @@
     "android:uninstall": "bash scripts/android-uninstall-package.sh com.openwhoop",
     "android:uninstall-keep-data": "adb shell cmd package uninstall -k com.openwhoop",
     "android:install:release": "bash scripts/android-install-apk.sh com.openwhoop release/openwhoop-app-release.apk",
-    "android:install:debug": "bash scripts/android-install-apk.sh com.openwhoop debug/openwhoop-app-debug.apk"
+    "android:install:debug": "bash scripts/android-install-apk.sh com.openwhoop debug/openwhoop-app-debug.apk",
+    "android:logs": "adb shell run-as com.openwhoop tail -f openwhoop-app.log"
   },
   "license": "MIT",
   "dependencies": {

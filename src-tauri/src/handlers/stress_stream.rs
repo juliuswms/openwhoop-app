@@ -131,7 +131,7 @@ pub async fn start_stress_stream(
 
     stop_heart_rate_stream_internal(&app, state.inner()).await?;
     stop_stress_stream_internal(&app, state.inner()).await?;
-    ensure_connected_saved_whoop(&address).await?;
+    ensure_connected_saved_whoop(state.inner(), &address).await?;
 
     let handler = tauri_plugin_blec::get_handler()?;
     let callback_app = app.clone();

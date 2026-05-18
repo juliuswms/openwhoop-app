@@ -18,16 +18,16 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2.10", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = "0.4"
-openwhoop-entities = { version = "0.1.0", git = "https://github.com/bWanShiTong/openwhoop", branch = "feat/app-support" }
-openwhoop-codec = { version = "0.1.0", git = "https://github.com/bWanShiTong/openwhoop", branch = "feat/app-support" }
-openwhoop = { version = "0.1.0", git = "https://github.com/bWanShiTong/openwhoop", branch = "feat/app-support", features = [
+openwhoop-entities = { version = "0.1.0", git = "https://github.com/bWanShiTong/openwhoop", branch = "master" }
+openwhoop-codec = { version = "0.1.0", git = "https://github.com/bWanShiTong/openwhoop", branch = "master" }
+openwhoop = { version = "0.1.0", git = "https://github.com/bWanShiTong/openwhoop", branch = "master", features = [
     "tauri-blec",
 ] }
 btleplug = "0.12.0"

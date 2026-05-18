@@ -30,9 +30,11 @@ pub fn frame_whoop_command(
     }
 }
 
-pub async fn ensure_connected_saved_whoop(address: &str) -> Result<(), String> {
+pub async fn ensure_connected_saved_whoop(state: &AppState, address: &str) -> Result<(), String> {
+    let _ble_guard = state.lock_ble_operation().await;
     let handler = tauri_plugin_blec::get_handler().map_err(|err| err.to_string())?;
     let normalized_address = normalize_whoop_address(address)?;
+    let _ = handler.stop_scan().await;
 
     if handler.is_connected() {
         let connected_device = handler
@@ -70,7 +72,7 @@ pub async fn send_device_command(
 ) -> AppResult<()> {
     // Creates some issues fixes some
     // stop_background_sync(state).await?;
-    ensure_connected_saved_whoop(address).await?;
+    ensure_connected_saved_whoop(_state, address).await?;
 
     let handler = tauri_plugin_blec::get_handler().map_err(|err| err.to_string())?;
     let transport = TauriBlecTransport::connected(handler);
