@@ -155,3 +155,8 @@ export interface ImportSyncStatus {
 export interface EarliestReadingTimeSummary {
     isoDate: string;
 }
+
+export interface AlarmInfo {
+    enabled: boolean;
+    unix: number;
+}

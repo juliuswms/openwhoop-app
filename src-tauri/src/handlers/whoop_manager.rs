@@ -3,7 +3,7 @@ use std::{fs, io::ErrorKind};
 use openwhoop::ble::tauri_blec::TauriBlecDevice;
 use openwhoop_codec::{
     constants::{WhoopGeneration, ALL_WHOOP_SERVICES},
-    WhoopPacket,
+    WhoopData, WhoopPacket,
 };
 use tauri::AppHandle;
 use tauri_plugin_blec::{Handler, OnDisconnectHandler};
@@ -13,6 +13,7 @@ use crate::{
     error::{AppError, AppResult},
     handlers::{log_error, log_info, log_warn, whoop_device_name},
     internals::send_device_command,
+    internals::get_device_alarm,
     scan_for_saved_whoop,
     sync::{start_background_sync, stop_background_sync},
     AppState,
@@ -52,6 +53,13 @@ pub struct SavedWhoopConnectionResult {
     generation: Option<WhoopGeneration>,
     connected: bool,
     error: Option<AppError>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlarmInfo {
+    pub enabled: bool,
+    pub unix: u32,
 }
 
 #[tauri::command]
@@ -114,6 +122,90 @@ pub async fn erase_whoop_device_data(
     .await?;
     log_info(&app, "device_command", "WHOOP erase command completed.");
     Ok(())
+}
+
+#[tauri::command]
+pub async fn ring_alarm(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let store = read_persisted_whoop_store(&app)?;
+    let Some((address, generation)) = store.whoop_and_generation() else {
+        return Err(format!("Whoop device not selected"));
+    };
+
+    log_info(
+        &app,
+        "device_command",
+        format!(
+            "Ring alarm requested address={} generation={}",
+            address, generation
+        ),
+    );
+
+    let packet = match generation {
+        WhoopGeneration::Gen4 => WhoopPacket::run_alarm_now(),
+        WhoopGeneration::Gen5 => WhoopPacket::run_haptic_pattern_gen5(),
+        WhoopGeneration::Placeholder => {
+            return Err("WhoopGeneration::Placeholder cannot ring a device".to_owned());
+        }
+    };
+
+    send_device_command(state.inner(), &app, address, generation, packet).await?;
+    log_info(&app, "device_command", "WHOOP ring alarm completed.");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_alarm(
+    unix: u32,
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let store = read_persisted_whoop_store(&app)?;
+    let Some((address, generation)) = store.whoop_and_generation() else {
+        return Err(format!("Whoop device not selected"));
+    };
+
+    log_info(
+        &app,
+        "device_command",
+        format!(
+            "Set alarm requested address={} generation={} unix={}",
+            address, generation, unix
+        ),
+    );
+
+    let packet = WhoopPacket::alarm_time(unix, generation);
+    send_device_command(state.inner(), &app, address, generation, packet).await?;
+    log_info(&app, "device_command", "WHOOP set alarm completed.");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_alarm(
+    app: AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<AlarmInfo, String> {
+    let store = read_persisted_whoop_store(&app)?;
+    let Some((address, generation)) = store.whoop_and_generation() else {
+        return Err(format!("Whoop device not selected"));
+    };
+
+    log_info(
+        &app,
+        "device_command",
+        format!(
+            "Get alarm requested address={} generation={}",
+            address, generation
+        ),
+    );
+
+    let data = get_device_alarm(state.inner(), &app, address, generation).await?;
+    match data {
+        WhoopData::AlarmInfo { enabled, unix } => Ok(AlarmInfo { enabled, unix }),
+        _ => Err(format!("Unexpected response from device: {:?}", data)),
+    }
 }
 
 #[tauri::command]

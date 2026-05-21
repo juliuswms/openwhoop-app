@@ -173,3 +173,15 @@
 .shared-nav-item.active {
   color: #f3f6f8;
 }
+
+.ui-select {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  border: 1px solid #2a2f3a;
+  border-radius: 0.5rem;
+  background: #121419;
+  color: #f4f7fb;
+  cursor: pointer;
+  min-width: 4rem;
+}

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
     ActivityTypeOption,
+    AlarmInfo,
     AppLogLevel,
     DailyInfoSummary,
     DailyStatsAverageSummary,
@@ -165,4 +166,16 @@ export async function getDebugPackets(): Promise<boolean> {
 
 export async function setDebugPackets(enabled: boolean): Promise<boolean> {
     return await invoke("set_debug_packets", { enabled });
+}
+
+export async function setAlarm(unix: number): Promise<void> {
+    await invoke("set_alarm", { unix });
+}
+
+export async function ringAlarm(): Promise<void> {
+    await invoke("ring_alarm");
+}
+
+export async function getAlarm(): Promise<AlarmInfo> {
+    return await invoke("get_alarm");
 }

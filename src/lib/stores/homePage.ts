@@ -5,6 +5,7 @@ import {
   clearSelectedWhoopAddress,
   connectToSavedWhoop,
   eraseWhoopDeviceData,
+  getAlarm,
   getEarliestReadingTime,
   getDailyInfo,
   getLast7DayDailyStatsAverage,
@@ -13,8 +14,11 @@ import {
   getUnfinishedActivity,
   getWhoopSelectionState,
   rebootWhoopDevice,
+  ringAlarm,
+  setAlarm,
 } from "$lib/api";
 import type {
+  AlarmInfo,
   DailyInfoSummary,
   DailyStatsAverageSummary,
   DailyStatsSummary,
@@ -93,6 +97,8 @@ export function createHomePageState() {
   const reconnecting = writable(false);
   const rebooting = writable(false);
   const erasing = writable(false);
+  const alarmBusy = writable(false);
+  const alarmInfo = writable<AlarmInfo | null>(null);
   const activeScreen = writable<ActiveScreen>("main");
   const hasSelectedWhoopBefore = writable(false);
   const latestSyncLabel = writable(emptySyncLabel);
@@ -371,6 +377,80 @@ export function createHomePageState() {
       selectedWhoopError.set(toErrorMessage(reason));
     } finally {
       erasing.set(false);
+    }
+  }
+
+  async function fetchAlarm() {
+    const whoop = get(selectedWhoop);
+
+    if (!isTauri() || !whoop) {
+      return;
+    }
+
+    logApp("info", "home.device", "Fetching alarm from WHOOP.", {
+      address: whoop.address,
+    });
+    selectedWhoopError.set("");
+    alarmBusy.set(true);
+
+    try {
+      const info = await getAlarm();
+      alarmInfo.set(info);
+    } catch (reason) {
+      logApp("error", "home.device", "WHOOP get alarm failed.", reason);
+      selectedWhoopError.set(toErrorMessage(reason));
+    } finally {
+      alarmBusy.set(false);
+    }
+  }
+
+  async function ringSelectedWhoopAlarm() {
+    const whoop = get(selectedWhoop);
+
+    if (!isTauri() || !whoop) {
+      return;
+    }
+
+    logApp("info", "home.device", "Ringing WHOOP alarm.", {
+      address: whoop.address,
+      generation: whoop.generation,
+    });
+    selectedWhoopError.set("");
+    alarmBusy.set(true);
+
+    try {
+      await ringAlarm();
+    } catch (reason) {
+      logApp("error", "home.device", "WHOOP ring alarm failed.", reason);
+      selectedWhoopError.set(toErrorMessage(reason));
+    } finally {
+      alarmBusy.set(false);
+    }
+  }
+
+  async function setSelectedWhoopAlarm(unix: number) {
+    const whoop = get(selectedWhoop);
+
+    if (!isTauri() || !whoop) {
+      return;
+    }
+
+    logApp("info", "home.device", "Setting WHOOP alarm.", {
+      address: whoop.address,
+      generation: whoop.generation,
+      unix,
+    });
+    selectedWhoopError.set("");
+    alarmBusy.set(true);
+
+    try {
+      await setAlarm(unix);
+      alarmInfo.set({ enabled: true, unix });
+    } catch (reason) {
+      logApp("error", "home.device", "WHOOP set alarm failed.", reason);
+      selectedWhoopError.set(toErrorMessage(reason));
+    } finally {
+      alarmBusy.set(false);
     }
   }
 
@@ -700,6 +780,8 @@ export function createHomePageState() {
     reconnecting,
     rebooting,
     erasing,
+    alarmBusy,
+    alarmInfo,
     activeScreen,
     hasSelectedWhoopBefore,
     latestSyncLabel,
@@ -718,6 +800,9 @@ export function createHomePageState() {
     unselectWhoop,
     rebootSelectedWhoop,
     eraseSelectedWhoopData,
+    fetchAlarm,
+    ringSelectedWhoopAlarm,
+    setSelectedWhoopAlarm,
     openDeviceManagement,
     navigateToScreen,
     closeDeviceManagement,

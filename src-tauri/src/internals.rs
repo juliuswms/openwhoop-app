@@ -1,5 +1,6 @@
 use openwhoop::{ble::tauri_blec::TauriBlecTransport, db::DatabaseHandler, WhoopDeviceWith};
-use openwhoop_codec::{constants::WhoopGeneration, WhoopPacket};
+use openwhoop_codec::{constants::WhoopGeneration, WhoopData, WhoopPacket};
+use std::time::Duration;
 
 use crate::{
     config::{normalize_whoop_address, SAVED_WHOOP_SCAN_DURATION_SECS},
@@ -82,4 +83,49 @@ pub async fn send_device_command(
 
     whoop.connect().await?;
     Ok(whoop.send_command(command).await?)
+}
+
+pub async fn get_device_alarm(
+    state: &AppState,
+    _app: &tauri::AppHandle,
+    address: &str,
+    generation: WhoopGeneration,
+) -> AppResult<WhoopData> {
+    ensure_connected_saved_whoop(state, address).await?;
+
+    let handler = tauri_plugin_blec::get_handler().map_err(|err| err.to_string())?;
+
+    let (tx, mut rx) = tauri::async_runtime::channel::<Vec<u8>>(1);
+
+    handler
+        .subscribe(generation.cmd_from_strap(), Some(generation.service()), move |value: Vec<u8>| {
+            let _ = tx.try_send(value);
+        })
+        .await
+        .map_err(|err| err.to_string())?;
+
+    let packet = WhoopPacket::get_alarm_time();
+    let data = frame_whoop_command(packet, generation)?;
+    handler
+        .send_data(
+            generation.cmd_to_strap(),
+            Some(generation.service()),
+            &data,
+            tauri_plugin_blec::models::WriteType::WithoutResponse,
+        )
+        .await
+        .map_err(|err| err.to_string())?;
+
+    match tokio::time::timeout(Duration::from_secs(30), rx.recv()).await {
+        Ok(Some(notification)) => {
+            let _ = handler.unsubscribe(generation.cmd_from_strap()).await;
+            let packet = WhoopPacket::from_data(notification).map_err(|err| err.to_string())?;
+            WhoopData::from_packet(packet, generation).map_err(|err| err.to_string().into())
+        }
+        Ok(None) => Err("stream ended unexpectedly".into()),
+        Err(_) => {
+            let _ = handler.unsubscribe(generation.cmd_from_strap()).await;
+            Err("timed out waiting for alarm notification".into())
+        }
+    }
 }

@@ -21,6 +21,8 @@
   const reconnecting = appStore.home.reconnecting;
   const rebooting = appStore.home.rebooting;
   const erasing = appStore.home.erasing;
+  const alarmBusy = appStore.home.alarmBusy;
+  const alarmInfo = appStore.home.alarmInfo;
   const activeScreen = appStore.home.activeScreen;
   const hasSelectedWhoopBefore = appStore.home.hasSelectedWhoopBefore;
   const latestSyncLabel = appStore.home.latestSyncLabel;
@@ -172,11 +174,16 @@
       reconnecting={$reconnecting}
       rebooting={$rebooting}
       erasing={$erasing}
+      alarmBusy={$alarmBusy}
+      alarmInfo={$alarmInfo}
       showReconnect={!$selectedWhoop.connected}
       onReconnect={appStore.home.reconnectSavedWhoop}
       onChooseAnother={appStore.home.unselectWhoop}
       onReboot={appStore.home.rebootSelectedWhoop}
       onErase={appStore.home.eraseSelectedWhoopData}
+      onSetAlarm={appStore.home.setSelectedWhoopAlarm}
+      onRingAlarm={appStore.home.ringSelectedWhoopAlarm}
+      onGetAlarm={appStore.home.fetchAlarm}
       onOpenScan={appStore.home.openDeviceChooser}
       onBack={appStore.home.closeDeviceManagement}
     />
