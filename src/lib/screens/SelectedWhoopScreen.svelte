@@ -17,6 +17,8 @@
     monitorCards,
   } from "$lib/stores/selectedWhoopScreen";
   import "./SelectedWhoopScreen.css";
+  import Back from "$lib/components/Back.svelte";
+  import Forward from "$lib/components/Forward.svelte";
 
   export let whoop: SelectedWhoop;
   export let dailyInfo: DailyInfoSummary | null = null;
@@ -217,7 +219,7 @@
           on:click={onPreviousDate}
           disabled={!canSelectPreviousDate}
         >
-          ‹
+          <Back />
         </button>
         <span class="switcher-label">{currentDateLabel}</span>
         <button
@@ -227,7 +229,7 @@
           on:click={onNextDate}
           disabled={isToday}
         >
-          ›
+          <Forward />
         </button>
       </div>
 
@@ -273,7 +275,7 @@
         >
           <div class="monitor-head">
             <h2>{card.title}</h2>
-            <span aria-hidden="true">›</span>
+            <span aria-hidden="true"><Forward /></span>
           </div>
           <div class="monitor-body">
             {#if index === 1}
@@ -339,7 +341,9 @@
                     {formatActivityTime(activity.start)} - {formatActivityTime(activity.end)}
                   </p>
                 </div>
-                <span class="activity-duration">{formatActivityStrain(activity)}</span>
+                <div class="activity-duration activity-background">
+                  {formatActivityStrain(activity)}
+                </div>
               </button>
             {/each}
           </div>
@@ -517,9 +521,13 @@
     display: block;
     font: inherit;
     margin: 0;
-    padding: 0;
+    padding: 0.2rem 0;
     text-align: left;
     width: 100%;
+  }
+
+  .monitor-head {
+    padding: 0 0.5rem;
   }
 
   .activity-row-button {
@@ -543,6 +551,7 @@
     display: flex;
     gap: 0.5rem;
     justify-content: space-between;
+    padding: 0 0.5rem;
   }
 
   .stress-preview-value {
@@ -574,5 +583,14 @@
   .activity-modal-delete {
     background: rgba(176, 44, 44, 0.14);
     color: #ff9b9b;
+  }
+
+  .activity-background {
+    background: rgb(0, 140, 225);
+    height: 100%;
+    padding: 0 1rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
   }
 </style>
