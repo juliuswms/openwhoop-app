@@ -19,6 +19,7 @@
   import "./SelectedWhoopScreen.css";
   import Back from "$lib/components/Back.svelte";
   import Forward from "$lib/components/Forward.svelte";
+    import CircleProgressBar from "$lib/components/CircleProgressBar.svelte";
 
   export let whoop: SelectedWhoop;
   export let dailyInfo: DailyInfoSummary | null = null;
@@ -258,9 +259,11 @@
     <section class="stats-grid" aria-label="Daily summaries">
       {#each statCards as stat}
         <article class="stat-card">
-          <div class="stat-ring">
-            <span>{stat.value}</span>
-          </div>
+            <CircleProgressBar progress={stat.percent} color=rgb(0,140,255)>
+                <div class="stat-ring">
+                    <span class="stat-ring-text">{stat.value}</span>
+                </div>
+            </CircleProgressBar>
           <p>{stat.label}</p>
         </article>
       {/each}

@@ -23,11 +23,17 @@ export function getStatCards(
     {
       label: "Sleep",
       value: sleepScore === null ? "--%" : `${Math.round(sleepScore)}%`,
+      percent: sleepScore === null ? 0 : (sleepScore / 100),
     },
-    { label: "Recovery", value: "--%" },
+    {
+      label: "Recovery",
+      value: "--%",
+      percent: 0,
+    },
     {
       label: "Strain",
       value: strainScore === null ? "--" : strainScore.toFixed(1),
+      percent: strainScore === null ? 0 : (4 / 21),
     },
   ];
 }
