@@ -33,7 +33,7 @@ export function getStatCards(
     {
       label: "Strain",
       value: strainScore === null ? "--" : strainScore.toFixed(1),
-      percent: strainScore === null ? 0 : (4 / 21),
+      percent: strainScore === null ? 0 : (strainScore / 21),
     },
   ];
 }

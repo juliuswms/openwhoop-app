@@ -1,10 +1,10 @@
 <script>
   export let progress;
   export let color;
-  const angle = 360 * progress;
+  $: angle = 360 * progress;
   const thickness = 65;
 
-  const progressArc = `conic-gradient(
+  $: progressArc = `conic-gradient(
     ${color} 0deg ${angle}deg,
     transparent ${angle}deg 360deg
     )`;
@@ -40,10 +40,6 @@
       /* Mask away the centre */
       -webkit-mask: var(--mask);
       mask: var(--mask);
-
-      /* Smooth transition when progress changes */
-      transition: background 500ms ease-in;
-      will-change: background;
     }
 </style>
 
