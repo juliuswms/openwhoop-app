@@ -1,5 +1,7 @@
 # OpenWhoop App
 
+> Note: This is a preservation fork. Original by WanShiTong, taken down June 2026.
+
 OpenWhoop App is a SvelteKit + Tauri 2 mobile client for connecting to a WHOOP device over Bluetooth, syncing data into a local SQLite database, and viewing daily health and activity information on Android and iOS.
 
 It is built on top of the `openwhoop` Rust libraries and uses Tauri commands as the bridge between the Svelte UI and the BLE/database runtime.
